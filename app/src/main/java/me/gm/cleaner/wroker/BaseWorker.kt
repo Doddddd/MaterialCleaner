@@ -2,6 +2,8 @@ package me.gm.cleaner.wroker
 
 import android.app.NotificationManager
 import android.content.Context
+import android.content.pm.ServiceInfo
+import android.os.Build
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -20,7 +22,7 @@ abstract class BaseWorker(private val appContext: Context, workerParams: WorkerP
     protected abstract val notificationTitle: String
     private var progress: Int = 0
 
-    final override suspend fun getForegroundInfo(): ForegroundInfo {
+    private fun createForegroundInfo(): ForegroundInfo {
         val cancelIntent = WorkManager.getInstance(appContext).createCancelPendingIntent(id)
         val notification = NotificationCompat
             .Builder(appContext, workName)
@@ -32,6 +34,7 @@ abstract class BaseWorker(private val appContext: Context, workerParams: WorkerP
             .setProgress(100, progress, false)
             .addAction(0, appContext.getString(android.R.string.cancel), cancelIntent)
             .build()
+
         NotificationManagerCompat.from(appContext).run {
             val channel = NotificationChannelCompat
                 .Builder(workName, NotificationManager.IMPORTANCE_MAX)
@@ -39,7 +42,20 @@ abstract class BaseWorker(private val appContext: Context, workerParams: WorkerP
                 .build()
             createNotificationChannel(channel)
         }
-        return ForegroundInfo(id.hashCode(), notification)
+
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ForegroundInfo(
+                id.hashCode(),
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            )
+        } else {
+            ForegroundInfo(id.hashCode(), notification)
+        }
+    }
+
+    final override suspend fun getForegroundInfo(): ForegroundInfo {
+        return createForegroundInfo()
     }
 
     private val limiter = RootWorkerService.CallbackRateLimiter()
@@ -47,7 +63,7 @@ abstract class BaseWorker(private val appContext: Context, workerParams: WorkerP
     protected fun updateForeground(progress: Int) {
         this.progress = progress
         limiter.tryTriggerCallback {
-            setForegroundAsync(foregroundInfoAsync.get())
+            setForegroundAsync(createForegroundInfo())
         }
     }
 }
