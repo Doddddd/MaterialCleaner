@@ -11,6 +11,10 @@ import java.nio.file.LinkOption
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.Files
+import java.nio.file.SimpleFileVisitor
+import java.nio.file.attribute.BasicFileAttributes
+import java.nio.file.FileVisitResult
 import java.util.regex.Pattern
 import kotlin.io.path.CopyActionContext
 import kotlin.io.path.CopyActionResult
@@ -160,7 +164,23 @@ object FileUtils {
                 child.startsWith(parent + File.separator, true)
 
     @Throws(IOException::class)
-    inline fun fileTreeSize(path: Path): Long = 0
+    inline fun fileTreeSize(path: Path): Long {
+        val size = LongArray(1)
+        java.nio.file.Files.walkFileTree(path, object : java.nio.file.SimpleFileVisitor<Path>() {
+            override fun visitFile(
+                file: Path,
+                attrs: java.nio.file.attribute.BasicFileAttributes
+            ): java.nio.file.FileVisitResult {
+                size[0] += attrs.size()
+                return java.nio.file.FileVisitResult.CONTINUE
+            }
+
+            override fun visitFileFailed(file: Path, exc: IOException?): java.nio.file.FileVisitResult {
+                return java.nio.file.FileVisitResult.CONTINUE
+            }
+        })
+        return size[0]
+    }
 
     @OptIn(ExperimentalPathApi::class)
     inline fun move(source: Path, target: Path): Boolean {
